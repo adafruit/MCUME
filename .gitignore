@@ -1,0 +1,9 @@
+# These are files and directories that the user is instructed to create during
+# the normal build process. Don't offer to commit them to git.
+*/build
+pico-sdk
+
+# Ignores like this that are specific to operating environments are better
+# expressed in your user-global ignores, because every environment creates
+# different junk. However, out of expediency, these are ignored anyway:
+.DS_Store
