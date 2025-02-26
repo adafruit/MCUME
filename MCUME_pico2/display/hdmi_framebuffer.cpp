@@ -337,23 +337,34 @@ void hdmi_framebuffer(hdmi_framebuffer_obj_t *self, uint16_t width, uint16_t hei
     // 250 Mbps, which is very close to the bit clock for 480p 60Hz (252 MHz).
     // If we want the exact rate then we'll have to reconfigure PLLs.
 
+    // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
+#define PIN_CKN (15u)
+#define PIN_CKP (14u)
+#define PIN_D0N (19u)
+#define PIN_D0P (18u)
+#define PIN_D1N (17u)
+#define PIN_D1P (16u)
+#define PIN_D2N (13u)
+#define PIN_D2P (12u)
+
+    constexpr int HSTX_FIRST_PIN = 12;
+    struct { uint8_t clk_p, rgb_p[3]; } pinout =   { PIN_CKP, PIN_D0P, PIN_D1P, PIN_D2P };
 
     // Assign clock pair to two neighbouring pins:
-    hstx_ctrl_hw->bit[2] = HSTX_CTRL_BIT0_CLK_BITS;
-    hstx_ctrl_hw->bit[3] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
+    hstx_ctrl_hw->bit[(pinout.clk_p    ) - HSTX_FIRST_PIN] = HSTX_CTRL_BIT0_CLK_BITS;
+    hstx_ctrl_hw->bit[(pinout.clk_p ^ 1) - HSTX_FIRST_PIN] = HSTX_CTRL_BIT0_CLK_BITS | HSTX_CTRL_BIT0_INV_BITS;
     for (uint lane = 0; lane < 3; ++lane) {
-      // For each TMDS lane, assign it to the correct GPIO pair based on the
-      // desired pinout:
-      static const int lane_to_output_bit[3] = {0, 6, 4};
-      int bit = lane_to_output_bit[lane];
-      // Output even bits during first half of each HSTX cycle, and odd bits
-      // during second half. The shifter advances by two bits each cycle.
-      uint32_t lane_data_sel_bits =
-          (lane * 10    ) << HSTX_CTRL_BIT0_SEL_P_LSB |
-          (lane * 10 + 1) << HSTX_CTRL_BIT0_SEL_N_LSB;
-      // The two halves of each pair get identical data, but one pin is inverted.
-      hstx_ctrl_hw->bit[bit    ] = lane_data_sel_bits;
-      hstx_ctrl_hw->bit[bit + 1] = lane_data_sel_bits | HSTX_CTRL_BIT0_INV_BITS;
+        // For each TMDS lane, assign it to the correct GPIO pair based on the
+        // desired pinout:
+        int bit = pinout.rgb_p[lane];
+        // Output even bits during first half of each HSTX cycle, and odd bits
+        // during second half. The shifter advances by two bits each cycle.
+        uint32_t lane_data_sel_bits =
+            (lane * 10    ) << HSTX_CTRL_BIT0_SEL_P_LSB |
+            (lane * 10 + 1) << HSTX_CTRL_BIT0_SEL_N_LSB;
+        // The two halves of each pair get identical data, but one pin is inverted.
+        hstx_ctrl_hw->bit[(bit    ) - HSTX_FIRST_PIN] = lane_data_sel_bits;
+        hstx_ctrl_hw->bit[(bit ^ 1) - HSTX_FIRST_PIN] = lane_data_sel_bits | HSTX_CTRL_BIT0_INV_BITS;
     }
 
     for (int i = 12; i <= 19; ++i) {

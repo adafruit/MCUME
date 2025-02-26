@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 
+set(PICO_PLATFORM rp2350)
+set(PICO_BOARD pico2)
+
 # Pull in PICO SDK (must be before project)
 include(pico_sdk_import.cmake)
 
@@ -8,7 +11,7 @@ include(pico_sdk_import.cmake)
 
 #set(TARGET testkeymax)
 #set(TARGET pico20)
-#set(TARGET pico64)
+set(TARGET pico64)
 #set(TARGET pico81)
 #set(TARGET pico800)
 #set(TARGET picospeccy)
@@ -21,7 +24,7 @@ include(pico_sdk_import.cmake)
 #set(TARGET picopce)
 #set(TARGET picosms)
 #set(TARGET picogen)
-set(TARGET picocastaway)
+#set(TARGET picocastaway)
 
 #set(TARGET pico5200)
 
