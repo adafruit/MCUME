@@ -291,7 +291,7 @@ static uint8_t kcnt = 0;
 static bool toggle = true;
 
 static char * textseq;
-static char * textload = "LOAD\"\"\r\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\tRUN\r";
+static char * textload = "10?CHR$(205.5+RND(1));:GOTO10\rRUN\r";
 static char textkey[1];
 
 static bool res=false;
