@@ -13,24 +13,24 @@
 // TFT
 #define TFT_SPIREG      spi1
 #define TFT_SPIDREQ     DREQ_SPI1_TX
-#define TFT_SCLK        14
-#define TFT_MOSI        15
-#define TFT_MISO        12
-#define TFT_DC          28
-#define TFT_CS          13  // 255 for LORES ST7789 (NO CS)
-#define TFT_RST         255 // 255 for ILI/ST if connected to 3.3V
+#define TFT_SCLK        30
+#define TFT_MOSI        31
+#define TFT_MISO        28
+#define TFT_DC          3
+#define TFT_CS          46  // 255 for LORES ST7789 (NO CS)
+#define TFT_RST         22  // 255 for ILI/ST if connected to 3.3V
 #define TFT_BACKLIGHT   255 // hardwired to 3.3v
 
 // 2 buttons
-#define PIN_KEY_USER1   28
-#define PIN_KEY_USER2   27 
+#define PIN_KEY_USER1   0
+#define PIN_KEY_USER2   4 
 
 // SD
-#define SD_SCLK         6
-#define SD_MOSI         7
-#define SD_MISO         4 
-#define SD_CS           5
-#define SD_DETECT       255
+#define SD_SCLK         34
+#define SD_MOSI         35
+#define SD_MISO         36 
+#define SD_CS           39
+#define SD_DETECT       33
 // Second SPI bus and DMA not conflicting with USB
 #define SD_SPIREG       spi0
 
