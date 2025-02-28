@@ -102,6 +102,7 @@ static volatile bool cancelled = false;
 static volatile uint8_t curTransfer = 0;
 static uint8_t nbTransfer = 0;
 
+#undef B16
 /* VGA structures / constants */
 #define R16(rgb) ((rgb>>8)&0xf8) 
 #define G16(rgb) ((rgb>>3)&0xfc) 
