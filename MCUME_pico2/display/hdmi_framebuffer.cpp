@@ -338,15 +338,6 @@ void hdmi_framebuffer(hdmi_framebuffer_obj_t *self, uint16_t width, uint16_t hei
     // If we want the exact rate then we'll have to reconfigure PLLs.
 
     // HSTX outputs 0 through 7 appear on GPIO 12 through 19.
-#define PIN_CKN (15u)
-#define PIN_CKP (14u)
-#define PIN_D0N (19u)
-#define PIN_D0P (18u)
-#define PIN_D1N (17u)
-#define PIN_D1P (16u)
-#define PIN_D2N (13u)
-#define PIN_D2P (12u)
-
     constexpr int HSTX_FIRST_PIN = 12;
     struct { uint8_t clk_p, rgb_p[3]; } pinout =   { PIN_CKP, PIN_D0P, PIN_D1P, PIN_D2P };
 
