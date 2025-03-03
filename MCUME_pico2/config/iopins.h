@@ -65,4 +65,7 @@
 #define PIN_D1P (17u)
 #define PIN_D2P (19u)
 
+#define PIN_USB_HOST_DP (1u)
+#define PIN_USB_HOST_DM (2u)
+
 #endif

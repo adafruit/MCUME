@@ -7,7 +7,7 @@
 #define INVX           1
 #define HAS_SND        1
 #define USE_VGA        1
-//#define HAS_USBHOST    1
+#define HAS_USBHOST    1
 #define HAS_USBPIO     1
 
 //#define ILI9341        1
