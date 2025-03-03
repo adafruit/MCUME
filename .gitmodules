@@ -1,0 +1,3 @@
+[submodule "MCUME_pico2/pico-sdk"]
+	path = MCUME_pico2/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk
