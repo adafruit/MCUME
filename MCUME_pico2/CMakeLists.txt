@@ -9,6 +9,7 @@ include(pico_sdk_import.cmake)
 # We also need PICO EXTRAS
 #include(pico_extras_import.cmake)
 
+if (NOT TARGET)
 #set(TARGET testkeymax)
 #set(TARGET pico20)
 set(TARGET pico64)
@@ -25,6 +26,7 @@ set(TARGET pico64)
 #set(TARGET picosms)
 #set(TARGET picogen)
 #set(TARGET picocastaway)
+endif()
 
 #set(TARGET pico5200)
 
