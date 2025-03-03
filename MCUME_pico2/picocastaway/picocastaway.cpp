@@ -49,7 +49,7 @@ int main(void) {
 //    set_sys_clock_khz(250000, true);  
 
 #ifdef HAS_USBPIO
-    set_sys_clock_khz(140000, true);
+    set_sys_clock_khz(120000, true);
 #else
     set_sys_clock_khz(250000, true);
     *((uint32_t *)(0x40010000+0x58)) = 2 << 16; //CLK_HSTX_DIV = 2 << 16; // HSTX clock/2
