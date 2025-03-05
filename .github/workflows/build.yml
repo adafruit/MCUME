@@ -1,0 +1,53 @@
+name: Build mcume
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+  check_suite:
+    types: [rerequested]
+
+
+jobs:
+  bins:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+
+    - name: Install ARM GCC
+      uses: carlosperate/arm-none-eabi-gcc-action@v1
+      with:
+        release: '13.2.Rel1'
+
+    - name: get submodules
+      run: git submodule update --init
+
+    - name: set up tinyusb
+      run: (cd MCUME_pico2/pico-sdk/lib/tinyusb && git submodule update --init . && python tools/get_deps.py rp2040)
+
+    # https://github.com/sekigon-gonnoc/Pico-PIO-USB/pull/164
+    - name: fix pico-pio-usb ref
+      run: (cd MCUME_pico2/pico-sdk/lib/tinyusb/hw/mcu/raspberry_pi/Pico-PIO-USB && git pull https://github.com/tannewt/Pico-PIO-USB/ better_timeouts)
+
+    - name: set up cmake
+      run: cmake -S MCUME_pico2 -B build -DPICO_SDK_PATH=MCUME_pico2/pico-sdk
+
+    - name: build
+      run: make -C build -j$(nproc)
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: uf2 files
+        path: build/*.uf2
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: elf files
+        path: build/*.elf
+
