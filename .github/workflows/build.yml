@@ -33,11 +33,8 @@ jobs:
     - name: fix pico-pio-usb ref
       run: (cd MCUME_pico2/pico-sdk/lib/tinyusb/hw/mcu/raspberry_pi/Pico-PIO-USB && git pull https://github.com/tannewt/Pico-PIO-USB/ better_timeouts)
 
-    - name: set up cmake
-      run: cmake -S MCUME_pico2 -B build -DPICO_SDK_PATH=MCUME_pico2/pico-sdk
-
-    - name: build
-      run: make -C build -j$(nproc)
+    - name: build targets
+      run: for target in pico64 pico20 pico81 picospeccy picomsx pico8086 picocolem picoo2em picovcs picogb picopce picosms picogen picocastway pico5200; do cmake -S MCUME_pico2 -B build -DPICO_SDK_PATH=MCUME_pico2/pico-sdk -DTARGET=$target && make -C build
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
