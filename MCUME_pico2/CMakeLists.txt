@@ -26,9 +26,9 @@ set(TARGET pico64)
 #set(TARGET picosms)
 #set(TARGET picogen)
 #set(TARGET picocastaway)
+#set(TARGET pico5200)
 endif()
 
-#set(TARGET pico5200)
 
 project(${TARGET} C CXX)
 
