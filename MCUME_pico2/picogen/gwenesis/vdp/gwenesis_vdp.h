@@ -19,6 +19,8 @@ __license__ = "GPLv3"
 #ifndef _gwenesis_vdp_H_
 #define _gwenesis_vdp_H_
 
+#include "stdint.h"
+
 #pragma once
 
 #define BIT(v, idx) (((v) >> (idx)) & 1)
