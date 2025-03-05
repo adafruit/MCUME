@@ -266,6 +266,7 @@ set(PICO8086_SOURCES
 		pico8086/i8259.cpp
 		pico8086/pico8086.cpp
 	)
+add_compile_definitions(INCLUDE_ROM_BASIC)
 endif()
 
 if( ${TARGET} MATCHES "picopce" )
