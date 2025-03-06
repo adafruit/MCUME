@@ -10,6 +10,7 @@
 #define HAS_USBHOST    1
 #define HAS_USBPIO     1
 
+#define PSRAM_CHIP_SELECT (47u)
 //#define ILI9341        1
 //#define ST7789         1
 //#define SWAP_JOYSTICK  1
