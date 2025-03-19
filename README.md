@@ -255,7 +255,7 @@ Game console systems supported and status on various MCU platforms<br>
   - "5200" => for atari5200, put your Atari 5200 roms here (.bin)
   - "800"  => for atari800, put your Atari 800 cartridges here (.rom)
   - 'c64"  => for c64, put your C64 programs here (.prg), with sub-dirs or not
-  - "vic20"  => for VIC20, put your V20 programs (.prg), with sub-dirs or not 
+  - "v20"  => for VIC20, put your V20 programs (.prg), with sub-dirs or not 
   - "apple2"  => for Apple2 disks, put your ".dsk" files here, with sub-dirs or not 
   - "o2em" => for odyssey/videopac, put your Videopac/Odysssey roms here (.bin)
   - "coleco" => for colem, put your Colecovision roms here (.rom, including coleco.rom)
