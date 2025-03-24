@@ -67,5 +67,6 @@
 
 #define PIN_USB_HOST_DP (1u)
 #define PIN_USB_HOST_DM (2u)
+#define PIN_USB_HOST_VBUS (11u)
 
 #endif
