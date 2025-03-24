@@ -1591,7 +1591,7 @@ void emu_init(void)
 
 #ifdef HAS_USBHOST
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  *Static*assert(PIN_USB_HOST_DP + 1 == PIN_USB_HOST_DM || PIN_USB_HOST_DP - 1 == PIN_USB_HOST_DM, "Permitted USB D+/D- configuration");
+  _Static_assert(PIN_USB_HOST_DP + 1 == PIN_USB_HOST_DM || PIN_USB_HOST_DP - 1 == PIN_USB_HOST_DM, "Permitted USB D+/D- configuration");
   pio_cfg.pinout = PIN_USB_HOST_DP + 1 == PIN_USB_HOST_DM ? PIO_USB_PINOUT_DPDM : PIO_USB_PINOUT_DMDP;
   pio_cfg.pin_dp = PIN_USB_HOST_DP;
 
