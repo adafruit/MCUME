@@ -1315,15 +1315,16 @@ static struct audio_buffer_format producer_format = {
 
 #define I2C_ADDR 0x18
 
+#define DEBUG_I2C (0)
 static void writeRegister(uint8_t reg, uint8_t value) {
   uint8_t buf[2];
   buf[0] = reg;
   buf[1] = value;
   int res = i2c_write_timeout_us(i2c0, I2C_ADDR, buf, sizeof(buf), /* nostop */ false, 1000);
   if (res != 2) {
-printf("res=%d\n", res);
     panic("i2c_write_timeout failed: res=%d\n", res);
   }
+if(DEBUG_I2C)
   printf("Write Reg: %d = 0x%x\n", reg, value);
 }
 
@@ -1332,21 +1333,25 @@ static uint8_t readRegister(uint8_t reg) {
   buf[0] = reg;
   int res = i2c_write_timeout_us(i2c0, I2C_ADDR, buf, sizeof(buf), /* nostop */ true, 1000);
   if (res != 1) {
+if(DEBUG_I2C)
 printf("res=%d\n", res);
     panic("i2c_write_timeout failed: res=%d\n", res);
   }
   res = i2c_read_timeout_us(i2c0, I2C_ADDR, buf, sizeof(buf), /* nostop */ false, 1000);
   if (res != 1) {
+if(DEBUG_I2C)
 printf("res=%d\n", res);
     panic("i2c_read_timeout failed: res=%d\n", res);
   }
   uint8_t value = buf[0];
+if(DEBUG_I2C)
   printf("Read Reg: %d = 0x%x\n", reg, value);
   return value;
 }
 
 static void modifyRegister(uint8_t reg, uint8_t mask, uint8_t value) {
   uint8_t current = readRegister(reg);
+if(DEBUG_I2C)
   printf("Modify Reg: %d = [Before: 0x%x] with mask 0x%x and value 0x%x\n", reg, current, mask, value);
   uint8_t new_value = (current & ~mask) | (value & mask);
   writeRegister(reg, new_value);
@@ -1374,6 +1379,7 @@ static void i2s_audio_init(int buffersize, void (*callback)(audio_sample * strea
   Wire_begin();
   sleep_ms(1000);
   
+if(DEBUG_I2C)
   printf("initialize codec\n");
 
   // Reset codec
@@ -1459,10 +1465,12 @@ setPage(0);
   // Return to page 0
   setPage(0);
 
+if(DEBUG_I2C)
   printf("Initialization complete!\n");
 
 
   // Read all registers for verification
+if(DEBUG_I2C) {
   printf("Reading all registers for verification:\n");
   
   setPage(0);
@@ -1537,7 +1545,8 @@ setPage(0);
 
   setPage(3);
   readRegister(0x10);  // AIC31XX_TIMERDIVIDER
-  
+ }
+ 
     const struct audio_format *output_format = audio_i2s_setup(&audio_format, &config);
     assert(output_format);
     if (!output_format) {
@@ -1552,7 +1561,6 @@ setPage(0);
 
 static void i2s_audio_handle_buffer(void) {
     audio_buffer *buffer = take_audio_buffer(producer_pool, true);
-printf("buffer@%p\n", buffer);
     fillsamples(reinterpret_cast<audio_sample*>(buffer->buffer->bytes), buffer->max_sample_count);
     buffer->sample_count = buffer->max_sample_count;
     give_audio_buffer(producer_pool, buffer);
