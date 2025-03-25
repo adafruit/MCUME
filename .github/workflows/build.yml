@@ -34,7 +34,7 @@ jobs:
       run: (cd MCUME_pico2/pico-sdk/lib/tinyusb/hw/mcu/raspberry_pi/Pico-PIO-USB && git pull https://github.com/tannewt/Pico-PIO-USB/ better_timeouts)
 
     - name: build targets
-      run: for target in pico64 pico20 pico800 picospeccy picomsx pico8086 picocolem picogb picopce picosms picogen; do cmake -S MCUME_pico2 -B build -DPICO_SDK_PATH=MCUME_pico2/pico-sdk -DTARGET=$target && make -C build; done
+      run: for target in pico64 pico20 pico800 picospeccy picomsx pico8086 picocolem picogb picopce picosms picogen; do cmake -S MCUME_pico2 -B build -DPICO_SDK_PATH=MCUME_pico2/pico-sdk -DTARGET=$target && make -C build -j$(nproc); done
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
