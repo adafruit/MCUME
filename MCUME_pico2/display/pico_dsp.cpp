@@ -1278,206 +1278,300 @@ void PICO_DSP::drawTextNoDma(int16_t x, int16_t y, const char * text, dsp_pixel 
 #include "pico/float.h"
 #include <string.h>
 #include <stdio.h>
+#include "pico/audio_i2s.h"
+#include "hardware/i2c.h"
 
-
-#ifdef AUDIO_1DMA
-#define SAMPLE_REPEAT_SHIFT 0    // not possible to repeat samples with single DMA!! 
-#endif
-#ifdef AUDIO_3DMA
-#define SAMPLE_REPEAT_SHIFT 2    // shift 2 is REPETITION_RATE=4
-#endif
-#ifndef SAMPLE_REPEAT_SHIFT
-#define SAMPLE_REPEAT_SHIFT 0    // not possible to repeat samples CBACK!!
-#endif
-
-#define REPETITION_RATE     (1<<SAMPLE_REPEAT_SHIFT) 
 
 static void (*fillsamples)(audio_sample * stream, int len) = nullptr;
-static audio_sample * snd_buffer;       // samples buffer (1 malloc for 2 buffers)
-static uint16_t snd_nb_samples;         // total nb samples (mono) later divided by 2
-static uint16_t snd_sample_ptr = 0;     // sample index
-static audio_sample * audio_buffers[2]; // pointers to 2 samples buffers 
-static volatile int cur_audio_buffer;
-static volatile int last_audio_buffer;
-#ifdef AUDIO_3DMA
-static uint32_t single_sample = 0;
-static uint32_t *single_sample_ptr = &single_sample;
-static int pwm_dma_chan, trigger_dma_chan, sample_dma_chan;
-#endif
-#ifdef AUDIO_1DMA
-static int pwm_dma_chan;
-#endif
-
-/********************************
- * Processing
-********************************/ 
-#ifdef AUDIO_1DMA
-static void __isr __time_critical_func(AUDIO_isr)()
-{
-  cur_audio_buffer = 1 - cur_audio_buffer;  
-  dma_hw->ch[pwm_dma_chan].al3_read_addr_trig = (intptr_t)audio_buffers[cur_audio_buffer];
-  dma_hw->ints1 = (1u << pwm_dma_chan);   
-}
-#endif
-
-#ifdef AUDIO_3DMA
-static void __isr __time_critical_func(AUDIO_isr)()
-{
-  cur_audio_buffer = 1 - cur_audio_buffer;  
-  dma_hw->ch[sample_dma_chan].al1_read_addr = (intptr_t)audio_buffers[cur_audio_buffer];
-  dma_hw->ch[trigger_dma_chan].al3_read_addr_trig = (intptr_t)&single_sample_ptr;
-  dma_hw->ints1 = (1u << trigger_dma_chan);
-}
-#endif
-
-// fill half buffer depending on current position
-static void pwm_audio_handle_buffer(void)
-{
-  if (last_audio_buffer == cur_audio_buffer) {
-    return;
-  }
-  audio_sample *buf = audio_buffers[last_audio_buffer];
-  last_audio_buffer = cur_audio_buffer;
-  fillsamples(buf, snd_nb_samples);
-}
-
-static void pwm_audio_reset(void)
-{
-  memset((void*)snd_buffer,0, snd_nb_samples*sizeof(uint8_t));
-}
-
 
 /********************************
  * Initialization
 ********************************/ 
-static void pwm_audio_init(int buffersize, void (*callback)(audio_sample * stream, int len))
-{
-  fillsamples = callback;
-  snd_nb_samples = buffersize;
-  snd_sample_ptr = 0;
-  snd_buffer =  (audio_sample*)malloc(snd_nb_samples*sizeof(audio_sample));
-  if (snd_buffer == NULL) {
-    printf("sound buffer could not be allocated!!!!!\n");
-    return;  
+struct audio_buffer_pool *producer_pool;
+
+#if AUDIO_8BIT
+_Static_assert(!AUDIO_8BIT, "only configured for 16 bit audio");
+#endif
+
+static audio_format_t audio_format = {
+        .sample_freq = SOUNDRATE,
+        .format = AUDIO_BUFFER_FORMAT_PCM_S16,
+        .channel_count = 1,
+};
+
+const struct audio_i2s_config config =
+        {
+            .data_pin = PICO_AUDIO_I2S_DATA_PIN,
+            .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
+            .dma_channel = AUD_DMA_CHANNEL,
+            .pio_sm = 0,
+            .clock_pins_swapped = true,
+        };
+
+static struct audio_buffer_format producer_format = {
+        .format = &audio_format,
+        .sample_stride = 2
+};
+
+#define I2C_ADDR 0x18
+
+static void writeRegister(uint8_t reg, uint8_t value) {
+  uint8_t buf[2];
+  buf[0] = reg;
+  buf[1] = value;
+  int res = i2c_write_timeout_us(i2c0, I2C_ADDR, buf, sizeof(buf), /* nostop */ false, 1000);
+  if (res != 2) {
+printf("res=%d\n", res);
+    panic("i2c_write_timeout failed: res=%d\n", res);
   }
-  memset((void*)snd_buffer,128, snd_nb_samples*sizeof(audio_sample));
+  printf("Write Reg: %d = 0x%x\n", reg, value);
+}
 
-  gpio_set_function(AUDIO_PIN, GPIO_FUNC_PWM);
+static uint8_t readRegister(uint8_t reg) {
+  uint8_t buf[1];
+  buf[0] = reg;
+  int res = i2c_write_timeout_us(i2c0, I2C_ADDR, buf, sizeof(buf), /* nostop */ true, 1000);
+  if (res != 1) {
+printf("res=%d\n", res);
+    panic("i2c_write_timeout failed: res=%d\n", res);
+  }
+  res = i2c_read_timeout_us(i2c0, I2C_ADDR, buf, sizeof(buf), /* nostop */ false, 1000);
+  if (res != 1) {
+printf("res=%d\n", res);
+    panic("i2c_read_timeout failed: res=%d\n", res);
+  }
+  uint8_t value = buf[0];
+  printf("Read Reg: %d = 0x%x\n", reg, value);
+  return value;
+}
 
-  int audio_pin_slice = pwm_gpio_to_slice_num(AUDIO_PIN);
-  pwm_set_gpio_level(AUDIO_PIN, 0);
+static void modifyRegister(uint8_t reg, uint8_t mask, uint8_t value) {
+  uint8_t current = readRegister(reg);
+  printf("Modify Reg: %d = [Before: 0x%x] with mask 0x%x and value 0x%x\n", reg, current, mask, value);
+  uint8_t new_value = (current & ~mask) | (value & mask);
+  writeRegister(reg, new_value);
+}
 
-  // Setup PWM for audio output
-  pwm_config config = pwm_get_default_config();
-  pwm_config_set_clkdiv(&config, (((float)SOUNDRATE)/1000) / REPETITION_RATE);
-  pwm_config_set_wrap(&config, 254);
-  pwm_init(audio_pin_slice, &config, true);
-
-  snd_nb_samples = snd_nb_samples/2;
-  audio_buffers[0] = &snd_buffer[0];
-  audio_buffers[1] = &snd_buffer[snd_nb_samples];
-
-#ifdef AUDIO_3DMA
-  int audio_pin_chan = pwm_gpio_to_channel(AUDIO_PIN);
-  // DMA chain of 3 DMA channels
-  sample_dma_chan = AUD_DMA_CHANNEL;
-  pwm_dma_chan = AUD_DMA_CHANNEL+1;
-  trigger_dma_chan = AUD_DMA_CHANNEL+2;
-
-  // setup PWM DMA channel
-  dma_channel_config pwm_dma_chan_config = dma_channel_get_default_config(pwm_dma_chan);
-  channel_config_set_transfer_data_size(&pwm_dma_chan_config, DMA_SIZE_32);              // transfer 32 bits at a time
-  channel_config_set_read_increment(&pwm_dma_chan_config, false);                        // always read from the same address
-  channel_config_set_write_increment(&pwm_dma_chan_config, false);                       // always write to the same address
-  channel_config_set_chain_to(&pwm_dma_chan_config, sample_dma_chan);                    // trigger sample DMA channel when done
-  channel_config_set_dreq(&pwm_dma_chan_config, DREQ_PWM_WRAP0 + audio_pin_slice);       // transfer on PWM cycle end
-  dma_channel_configure(pwm_dma_chan,
-                        &pwm_dma_chan_config,
-                        &pwm_hw->slice[audio_pin_slice].cc,   // write to PWM slice CC register
-                        &single_sample,                       // read from single_sample
-                        REPETITION_RATE,                      // transfer once per desired sample repetition
-                        false                                 // don't start yet
-                        );
+static void setPage(uint8_t page) {
+  printf("Set page %d\n", page);
+  writeRegister(0x00, page);
+}
 
 
-  // setup trigger DMA channel
-  dma_channel_config trigger_dma_chan_config = dma_channel_get_default_config(trigger_dma_chan);
-  channel_config_set_transfer_data_size(&trigger_dma_chan_config, DMA_SIZE_32);          // transfer 32-bits at a time
-  channel_config_set_read_increment(&trigger_dma_chan_config, false);                    // always read from the same address
-  channel_config_set_write_increment(&trigger_dma_chan_config, false);                   // always write to the same address
-  channel_config_set_dreq(&trigger_dma_chan_config, DREQ_PWM_WRAP0 + audio_pin_slice);   // transfer on PWM cycle end
-  dma_channel_configure(trigger_dma_chan,
-                        &trigger_dma_chan_config,
-                        &dma_hw->ch[pwm_dma_chan].al3_read_addr_trig,     // write to PWM DMA channel read address trigger
-                        &single_sample_ptr,                               // read from location containing the address of single_sample
-                        REPETITION_RATE * snd_nb_samples,              // trigger once per audio sample per repetition rate
-                        false                                             // don't start yet
-                        );
-  dma_channel_set_irq1_enabled(trigger_dma_chan, true);    // fire interrupt when trigger DMA channel is done
-  irq_set_exclusive_handler(DMA_IRQ_1, AUDIO_isr);
-  irq_set_priority (DMA_IRQ_1, PICO_DEFAULT_IRQ_PRIORITY-8);
-  irq_set_enabled(DMA_IRQ_1, true);
+static void Wire_begin() {
+    i2c_init(i2c0, 100000);
+    gpio_set_function(20, GPIO_FUNC_I2C);
+    gpio_set_function(21, GPIO_FUNC_I2C);
+}
 
-  // setup sample DMA channel
-  dma_channel_config sample_dma_chan_config = dma_channel_get_default_config(sample_dma_chan);
-  channel_config_set_transfer_data_size(&sample_dma_chan_config, DMA_SIZE_8);  // transfer 8-bits at a time
-  channel_config_set_read_increment(&sample_dma_chan_config, true);            // increment read address to go through audio buffer
-  channel_config_set_write_increment(&sample_dma_chan_config, false);          // always write to the same address
-  dma_channel_configure(sample_dma_chan,
-                        &sample_dma_chan_config,
-                        (char*)&single_sample + 2*audio_pin_chan,  // write to single_sample
-                        snd_buffer,                      // read from audio buffer
-                        1,                                         // only do one transfer (once per PWM DMA completion due to chaining)
-                        false                                      // don't start yet
-                        );
+static void i2s_audio_init(int buffersize, void (*callback)(audio_sample * stream, int len))
+{
 
-    // Kick things off with the trigger DMA channel
-    dma_channel_start(trigger_dma_chan);
-#endif
-#ifdef AUDIO_1DMA
-  // Each sample played from a single DMA channel
-  // Setup DMA channel to drive the PWM
-  pwm_dma_chan = AUD_DMA_CHANNEL;
-  dma_channel_config pwm_dma_chan_config = dma_channel_get_default_config(pwm_dma_chan);
-  // Transfer 16 bits at once, increment read address to go through sample
-  // buffer, always write to the same address (PWM slice CC register).
-  channel_config_set_transfer_data_size(&pwm_dma_chan_config, DMA_SIZE_16);
-  channel_config_set_read_increment(&pwm_dma_chan_config, true);
-  channel_config_set_write_increment(&pwm_dma_chan_config, false);
-  // Transfer on PWM cycle end
-  channel_config_set_dreq(&pwm_dma_chan_config, DREQ_PWM_WRAP0 + audio_pin_slice);
+  gpio_init(22);
+  gpio_set_dir(22, true);
+  gpio_put(22, true); // allow i2s to come out of reset
 
-  // Setup the channel and set it going
-  dma_channel_configure(
-      pwm_dma_chan,
-      &pwm_dma_chan_config,
-      &pwm_hw->slice[audio_pin_slice].cc, // Write to PWM counter compare
-      snd_buffer, // Read values from audio buffer
-      snd_nb_samples,
-      false // Start immediately if true.
-  );
+  Wire_begin();
+  sleep_ms(1000);
+  
+  printf("initialize codec\n");
 
-  // Setup interrupt handler to fire when PWM DMA channel has gone through the
-  // whole audio buffer
-  dma_channel_set_irq1_enabled(pwm_dma_chan, true);
-  irq_set_exclusive_handler(DMA_IRQ_1, AUDIO_isr);
-  //irq_set_priority (DMA_IRQ_1, PICO_DEFAULT_IRQ_PRIORITY-8);
-  irq_set_enabled(DMA_IRQ_1, true);
-  dma_channel_start(pwm_dma_chan);
-#endif
+  // Reset codec
+  writeRegister(0x01, 0x01);
+  sleep_ms(10);
+
+  // Interface Control
+  modifyRegister(0x1B, 0xC0, 0x00);
+  modifyRegister(0x1B, 0x30, 0x00);
+
+  // Clock MUX and PLL settings
+  modifyRegister(0x04, 0x03, 0x03);
+  modifyRegister(0x04, 0x0C, 0x04);
+  
+  writeRegister(0x06, 0x20); // PLL J
+  writeRegister(0x08, 0x00); // PLL D LSB
+  writeRegister(0x07, 0x00); // PLL D MSB
+  
+  modifyRegister(0x05, 0x0F, 0x02); // PLL P/R
+  modifyRegister(0x05, 0x70, 0x10);
+
+  // DAC/ADC Config
+  modifyRegister(0x0B, 0x7F, 0x08); // NDAC
+  modifyRegister(0x0B, 0x80, 0x80);
+  
+  modifyRegister(0x0C, 0x7F, 0x02); // MDAC
+  modifyRegister(0x0C, 0x80, 0x80);
+  
+  modifyRegister(0x12, 0x7F, 0x08); // NADC
+  modifyRegister(0x12, 0x80, 0x80);
+  
+  modifyRegister(0x13, 0x7F, 0x02); // MADC
+  modifyRegister(0x13, 0x80, 0x80);
+
+  // PLL Power Up
+  modifyRegister(0x05, 0x80, 0x80);
+
+  // Headset and GPIO Config
+setPage(1);
+modifyRegister(0x2e, 0xFF, 0x0b); 
+setPage(0);
+  modifyRegister(0x43, 0x80, 0x80); // Headset Detect
+  modifyRegister(0x30, 0x80, 0x80); // INT1 Control
+  modifyRegister(0x33, 0x3C, 0x14); // GPIO1
+
+
+  // DAC Setup
+  modifyRegister(0x3F, 0xC0, 0xC0);
+
+  // DAC Routing
+  setPage(1);
+  modifyRegister(0x23, 0xC0, 0x40);
+  modifyRegister(0x23, 0x0C, 0x04);
+
+  // DAC Volume Control
+  setPage(0);
+  modifyRegister(0x40, 0x0C, 0x00);
+  writeRegister(0x41, 0x28); // Left DAC Vol
+  writeRegister(0x42, 0x28); // Right DAC Vol
+
+  // ADC Setup
+  modifyRegister(0x51, 0x80, 0x80);
+  modifyRegister(0x52, 0x80, 0x00);
+  writeRegister(0x53, 0x68); // ADC Volume
+
+  // Headphone and Speaker Setup
+  setPage(1);
+  modifyRegister(0x1F, 0xC0, 0xC0); // HP Driver
+  modifyRegister(0x28, 0x04, 0x04); // HP Left Gain
+  modifyRegister(0x29, 0x04, 0x04); // HP Right Gain
+  writeRegister(0x24, 0x0A);  // Left Analog HP
+  writeRegister(0x25, 0x0A);  // Right Analog HP
+  
+  modifyRegister(0x28, 0x78, 0x40); // HP Left Gain
+  modifyRegister(0x29, 0x78, 0x40); // HP Right Gain
+
+  // Speaker Amp
+  modifyRegister(0x20, 0x80, 0x80);
+  modifyRegister(0x2A, 0x04, 0x04);
+  modifyRegister(0x2A, 0x18, 0x08);
+  writeRegister(0x26, 0x0A);
+
+  // Return to page 0
+  setPage(0);
+
+  printf("Initialization complete!\n");
+
+
+  // Read all registers for verification
+  printf("Reading all registers for verification:\n");
+  
+  setPage(0);
+  readRegister(0x00);  // AIC31XX_PAGECTL
+  readRegister(0x01);  // AIC31XX_RESET
+  readRegister(0x03);  // AIC31XX_OT_FLAG
+  readRegister(0x04);  // AIC31XX_CLKMUX
+  readRegister(0x05);  // AIC31XX_PLLPR
+  readRegister(0x06);  // AIC31XX_PLLJ
+  readRegister(0x07);  // AIC31XX_PLLDMSB
+  readRegister(0x08);  // AIC31XX_PLLDLSB
+  readRegister(0x0B);  // AIC31XX_NDAC
+  readRegister(0x0C);  // AIC31XX_MDAC
+  readRegister(0x0D);  // AIC31XX_DOSRMSB
+  readRegister(0x0E);  // AIC31XX_DOSRLSB
+  readRegister(0x10);  // AIC31XX_MINI_DSP_INPOL
+  readRegister(0x12);  // AIC31XX_NADC
+  readRegister(0x13);  // AIC31XX_MADC
+  readRegister(0x14);  // AIC31XX_AOSR
+  readRegister(0x19);  // AIC31XX_CLKOUTMUX
+  readRegister(0x1A);  // AIC31XX_CLKOUTMVAL
+  readRegister(0x1B);  // AIC31XX_IFACE1
+  readRegister(0x1C);  // AIC31XX_DATA_OFFSET
+  readRegister(0x1D);  // AIC31XX_IFACE2
+  readRegister(0x1E);  // AIC31XX_BCLKN
+  readRegister(0x1F);  // AIC31XX_IFACESEC1
+  readRegister(0x20);  // AIC31XX_IFACESEC2
+  readRegister(0x21);  // AIC31XX_IFACESEC3
+  readRegister(0x22);  // AIC31XX_I2C
+  readRegister(0x24);  // AIC31XX_ADCFLAG
+  readRegister(0x25);  // AIC31XX_DACFLAG1
+  readRegister(0x26);  // AIC31XX_DACFLAG2
+  readRegister(0x27);  // AIC31XX_OFFLAG
+  readRegister(0x2C);  // AIC31XX_INTRDACFLAG
+  readRegister(0x2D);  // AIC31XX_INTRADCFLAG
+  readRegister(0x2E);  // AIC31XX_INTRDACFLAG2
+  readRegister(0x2F);  // AIC31XX_INTRADCFLAG2
+  readRegister(0x30);  // AIC31XX_INT1CTRL
+  readRegister(0x31);  // AIC31XX_INT2CTRL
+  readRegister(0x33);  // AIC31XX_GPIO1
+  readRegister(0x3C);  // AIC31XX_DACPRB
+  readRegister(0x3D);  // AIC31XX_ADCPRB
+  readRegister(0x3F);  // AIC31XX_DACSETUP
+  readRegister(0x40);  // AIC31XX_DACMUTE
+  readRegister(0x41);  // AIC31XX_LDACVOL
+  readRegister(0x42);  // AIC31XX_RDACVOL
+  readRegister(0x43);  // AIC31XX_HSDETECT
+  readRegister(0x51);  // AIC31XX_ADCSETUP
+  readRegister(0x52);  // AIC31XX_ADCFGA
+  readRegister(0x53);  // AIC31XX_ADCVOL
+
+  setPage(1);
+  readRegister(0x1F);  // AIC31XX_HPDRIVER
+  readRegister(0x20);  // AIC31XX_SPKAMP
+  readRegister(0x21);  // AIC31XX_HPPOP
+  readRegister(0x22);  // AIC31XX_SPPGARAMP
+  readRegister(0x23);  // AIC31XX_DACMIXERROUTE
+  readRegister(0x24);  // AIC31XX_LANALOGHPL
+  readRegister(0x25);  // AIC31XX_RANALOGHPR
+  readRegister(0x26);  // AIC31XX_LANALOGSPL
+  readRegister(0x27);  // AIC31XX_RANALOGSPR
+  readRegister(0x28);  // AIC31XX_HPLGAIN
+  readRegister(0x29);  // AIC31XX_HPRGAIN
+  readRegister(0x2A);  // AIC31XX_SPLGAIN
+  readRegister(0x2B);  // AIC31XX_SPRGAIN
+  readRegister(0x2C);  // AIC31XX_HPCONTROL
+  readRegister(0x2E);  // AIC31XX_MICBIAS
+  readRegister(0x2F);  // AIC31XX_MICPGA
+  readRegister(0x30);  // AIC31XX_MICPGAPI
+  readRegister(0x31);  // AIC31XX_MICPGAMI
+  readRegister(0x32);  // AIC31XX_MICPGACM
+
+  setPage(3);
+  readRegister(0x10);  // AIC31XX_TIMERDIVIDER
+  
+    const struct audio_format *output_format = audio_i2s_setup(&audio_format, &config);
+    assert(output_format);
+    if (!output_format) {
+        panic("PicoAudio: Unable to open audio device.\n");
+    }
+    producer_pool = audio_new_producer_pool(&producer_format, 3, buffersize);
+    assert(producer_pool);
+    bool ok = audio_i2s_connect(producer_pool);
+    assert(ok); 
+    audio_i2s_set_enabled(true);
+}
+
+static void i2s_audio_handle_buffer(void) {
+    audio_buffer *buffer = take_audio_buffer(producer_pool, true);
+printf("buffer@%p\n", buffer);
+    fillsamples(reinterpret_cast<audio_sample*>(buffer->buffer->bytes), buffer->max_sample_count);
+    buffer->sample_count = buffer->max_sample_count;
+    give_audio_buffer(producer_pool, buffer);
 }
 
 static void core1_func_tft() {
     while (true) {
-        if (fillsamples != NULL) pwm_audio_handle_buffer();
+        if (producer_pool && fillsamples) i2s_audio_handle_buffer();
         __dmb();
     }
 }
 
 void PICO_DSP::begin_audio(int samplesize, void (*callback)(short * stream, int len))
 {
+  if (!callback) return;
+
+  i2s_audio_init(samplesize, callback);
+  fillsamples = callback;
   multicore_launch_core1(core1_func_tft);
-  pwm_audio_init(samplesize, callback);
 }
 
 void PICO_DSP::end_audio()
@@ -1486,8 +1580,7 @@ void PICO_DSP::end_audio()
 
 void * PICO_DSP::get_buffer_audio(void)
 {
-  void *buf = audio_buffers[cur_audio_buffer==0?1:0];
-  return buf; 
+    return NULL; // not implemented
 }
 
 #endif

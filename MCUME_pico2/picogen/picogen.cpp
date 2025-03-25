@@ -175,7 +175,7 @@ void emu_sndInit() {
 
 void * emu_sndGetBuffer(void)
 {
-    return tft.get_buffer_audio();
+    panic("not implemented");
 }
 
 void emu_sndPlaySound(int chan, int volume, int freq)

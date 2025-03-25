@@ -433,6 +433,13 @@ add_executable(${TARGET}
 
 pico_generate_pio_header(${TARGET} ${CMAKE_CURRENT_LIST_DIR}/psram/psram_spi.pio)
 
+add_subdirectory(pico-extras/src/rp2_common/pico_audio_i2s)
+add_subdirectory(pico-extras/src/common/pico_audio)
+add_subdirectory(pico-extras/src/common/pico_util_buffer)
+add_compile_definitions(PICO_AUDIO_I2S_PIO=1 PICO_AUDIO_I2S_DMA_IRQ=1 PICO_AUDIO_I2S_DATA_PIN=24 PICO_AUDIO_I2S_CLOCK_PIN_BASE=25 PICO_AUDIO_I2S_MONO_INPUT=1 PICO_AUDIO_I2S_SWAP_CLOCK=1)
+add_compile_definitions(PICO_DEFAULT_UART=0 PICO_DEFAULT_UART_TX_PIN=44 PICO_DEFAULT_UART_RX_PIN=45)
+set(EXTRA_AUDIO_LIB pico_util_buffer pico_audio pico_audio_i2s hardware_i2c)
+
 target_link_libraries(${TARGET} pico_multicore
 	    pico_stdlib
 	    hardware_dma
@@ -443,6 +450,7 @@ target_link_libraries(${TARGET} pico_multicore
         tinyusb_host 
         tinyusb_board
 		tinyusb_pico_pio_usb
+${EXTRA_AUDIO_LIB}
 	)
 
 target_compile_definitions(${TARGET} PRIVATE
@@ -450,7 +458,6 @@ target_compile_definitions(${TARGET} PRIVATE
     )
 
 target_compile_definitions(${TARGET} PRIVATE PICO_CLOCK_AJDUST_PERI_CLOCK_WITH_SYS_CLOCK=1)
-
 
 #target_compile_definitions(${TARGET} PRIVATE CFG_TUSB_DEBUG=2)
 #target_compile_options(${TARGET} PUBLIC -O3)
