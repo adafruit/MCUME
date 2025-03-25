@@ -1,3 +1,6 @@
 [submodule "MCUME_pico2/pico-sdk"]
 	path = MCUME_pico2/pico-sdk
 	url = https://github.com/raspberrypi/pico-sdk
+[submodule "MCUME_pico2/pico-extras"]
+	path = MCUME_pico2/pico-extras
+	url = https://github.com/adafruit/pico-extras.git
