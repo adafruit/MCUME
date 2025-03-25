@@ -1369,7 +1369,7 @@ static void Wire_begin() {
     gpio_set_function(21, GPIO_FUNC_I2C);
 }
 
-static void i2s_audio_init(int buffersize, void (*callback)(audio_sample * stream, int len))
+static void i2s_audio_init(void)
 {
 
   gpio_init(22);
@@ -1552,7 +1552,6 @@ if(DEBUG_I2C) {
     if (!output_format) {
         panic("PicoAudio: Unable to open audio device.\n");
     }
-    producer_pool = audio_new_producer_pool(&producer_format, 3, buffersize);
     assert(producer_pool);
     bool ok = audio_i2s_connect(producer_pool);
     assert(ok); 
@@ -1567,6 +1566,7 @@ static void i2s_audio_handle_buffer(void) {
 }
 
 static void core1_func_tft() {
+  i2s_audio_init();
     while (true) {
         if (producer_pool && fillsamples) i2s_audio_handle_buffer();
         __dmb();
@@ -1577,7 +1577,7 @@ void PICO_DSP::begin_audio(int samplesize, void (*callback)(short * stream, int 
 {
   if (!callback) return;
 
-  i2s_audio_init(samplesize, callback);
+  producer_pool = audio_new_producer_pool(&producer_format, 3, samplesize);
   fillsamples = callback;
   multicore_launch_core1(core1_func_tft);
 }
