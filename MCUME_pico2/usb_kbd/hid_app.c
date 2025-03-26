@@ -27,6 +27,7 @@
 #include "tusb.h"
 #include "kbd.h"
 #include "platform_config.h"
+#include "display/emuapi.h"
 
 /* ==================  Keycode translation table. ==================== */
 
@@ -373,6 +374,57 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
   prev_report = *report;
 }
  
+// this mapping is hard coded for a certain snes-style gamepad and picogb!
+static void process_gamepad_report (const uint8_t *report) {
+  uint16_t decoded_report = 0;
+
+  // X coordinate
+  if (report[0] == 0) {
+      decoded_report |= MASK_JOY2_RIGHT;
+  } else if(report[0] == 0xff) {
+      decoded_report |= MASK_JOY2_LEFT;
+  }
+
+  // Y coordinate
+  if (report[1] == 0) {
+      decoded_report |= MASK_JOY2_UP;
+  } else if(report[1] == 0xff) {
+      decoded_report |= MASK_JOY2_DOWN;
+  }
+
+  // X A B Y = top bits of byte 5 . Let's just have X/Y double A/B
+  if (report[5] & 0x10) {
+      decoded_report |= MASK_JOY2_BTN; // X
+  }
+  if (report[5] & 0x20) {
+      decoded_report |= MASK_KEY_USER3; // A -- this is picogb numbering
+  }
+  if (report[5] & 0x40) {
+      decoded_report |= MASK_JOY2_BTN; // B
+  }
+  if (report[5] & 0x80) {
+      decoded_report |= MASK_KEY_USER3; // Y
+  }
+
+  // SELECT START = top bits of byte 6
+  if (report[6] & 0x10) {
+      decoded_report |= MASK_KEY_USER1; // SELECT
+  }
+  if (report[6] & 0x20) {
+      decoded_report |= MASK_KEY_USER2; // START
+  }
+
+  // Decode shoulder buttons into B/A too
+  if (report[6] & 0x1) {
+      decoded_report |= MASK_JOY2_BTN; // B
+  }
+  if (report[6] & 0x2) {
+      decoded_report |= MASK_KEY_USER3; // Y
+  }
+  
+  kbd_signal_raw_gamepad(decoded_report);
+}
+
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
@@ -407,8 +459,10 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
   {
     printf("Keyboard found\n");
     tuh_hid_receive_report (dev_addr, instance);
+  } else {
+    printf("not a keyboard found (but asking for reports anyway!)\n");
+    tuh_hid_receive_report (dev_addr, instance);
   }
-
 }
 
 // Invoked when device with hid interface is un-mounted
@@ -426,11 +480,25 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
   // In principle we don't need to test that this USB report came from
   //   a keyboard, since we are only asking for reports from keyboards.
   // But, for future expansion, we should be systematic
-  switch (tuh_hid_interface_protocol (dev_addr, instance)) 
+int proto = tuh_hid_interface_protocol (dev_addr, instance);
+  switch (proto) 
   {
     case HID_ITF_PROTOCOL_KEYBOARD:
       process_kbd_report ((hid_keyboard_report_t const*) report);
       break;
+    case HID_ITF_PROTOCOL_NONE:
+        if (len == 8) {
+            process_gamepad_report (report);
+        }
+        break;
+#if 0 // you get to implement it, hoss!
+    case HID_ITF_PROTOCOL_MOUSE:
+        printf("MOUSE len=%d\n", len);
+        if (len >= 6) {
+            process_mouse_report (len, report);
+        }
+        break;
+#endif
   }
 
   // Ask the device for the next report -- asking for a report is a

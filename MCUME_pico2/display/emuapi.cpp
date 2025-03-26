@@ -1712,6 +1712,9 @@ int keypressed = emu_ReadKeys();
 #endif  
 }
 
+void kbd_signal_raw_gamepad(uint16_t new_pad_state) {
+    usbnavpad = new_pad_state;
+}
 
 void emu_start(void)
 {

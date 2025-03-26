@@ -48,6 +48,7 @@ extern "C" {
  * or released. */
 extern void kbd_signal_raw_key(int keycode, int code, int codeshifted, int flags, int pressed);
 extern void kbd_set_locale(KLAYOUT layout);
+extern void kbd_signal_raw_gamepad(uint16_t new_pad_state);
 #ifdef __cplusplus
 }
 #endif
