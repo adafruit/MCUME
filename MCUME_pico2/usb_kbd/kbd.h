@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #define KBD_FLAG_LSHIFT    0x01
 #define KBD_FLAG_LCONTROL  0x02
 #define KBD_FLAG_LALT      0x04
