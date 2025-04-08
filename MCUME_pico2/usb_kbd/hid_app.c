@@ -375,11 +375,20 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
 }
  
 // this mapping is hard coded for a certain snes-style gamepad and picogb!
+// Update this function in hid_app.c
 static void process_gamepad_report(const uint8_t *report) {
     uint16_t decoded_report = 0;
     
     // Default input format from your HID explorer output:
     // default input (no buttons pressed): 00 7F 7F 00 80 80 0F 00 00
+    
+    // Y-axis (byte 2): 0x00=up, 0x7F=center, 0xFF=down
+    // Note: We're swapping UP/DOWN here to fix the menu navigation
+    if (report[2] < 0x40) {
+        decoded_report |= MASK_JOY2_DOWN;  // Map UP to DOWN for the menu
+    } else if (report[2] > 0xB0) {
+        decoded_report |= MASK_JOY2_UP;    // Map DOWN to UP for the menu
+    }
     
     // X-axis (byte 1): 0x00=left, 0x7F=center, 0xFF=right
     if (report[1] < 0x40) {
@@ -388,52 +397,51 @@ static void process_gamepad_report(const uint8_t *report) {
         decoded_report |= MASK_JOY2_RIGHT;
     }
     
-    // Y-axis (byte 2): 0x00=up, 0x7F=center, 0xFF=down
-    if (report[2] < 0x40) {
-        decoded_report |= MASK_JOY2_UP;
-    } else if (report[2] > 0xB0) {
-        decoded_report |= MASK_JOY2_DOWN;
-    }
-    
     // Face buttons (byte 6)
+    // Looking at emu.cpp, we need to map:
+    // - A button to MASK_KEY_USER3
+    // - B button to MASK_JOY2_BTN
+    // - Select to MASK_KEY_USER1
+    // - Start to MASK_KEY_USER2
+    
     // A: 00 7F 7F 00 80 80 2F 00 00 (bit 0x20)
     if (report[6] & 0x20) {
-        decoded_report |= MASK_JOY2_BTN;  // A button
+        decoded_report |= MASK_KEY_USER3;  // A button maps to gb.direct.joypad_bits.a
     }
     
     // B: 00 7F 7F 00 80 80 4F 00 00 (bit 0x40)
     if (report[6] & 0x40) {
-        decoded_report |= MASK_KEY_USER1; // B button
+        decoded_report |= MASK_JOY2_BTN;   // B button maps to gb.direct.joypad_bits.b
     }
     
-    // X: 00 7F 7F 00 80 80 1F 00 00 (bit 0x10)
+    // X: 00 7F 7F 00 80 80 1F 00 00 (bit 0x10) - Map to B as an alternative
     if (report[6] & 0x10) {
-        decoded_report |= MASK_KEY_USER2; // X button
+        decoded_report |= MASK_JOY2_BTN;   // X button maps to B
     }
     
-    // Y: 00 7F 7F 00 80 80 8F 00 00 (bit 0x80)
+    // Y: 00 7F 7F 00 80 80 8F 00 00 (bit 0x80) - Map to A as an alternative
     if (report[6] & 0x80) {
-        decoded_report |= MASK_KEY_USER3; // Y button
-    }
-    
-    // Start: 00 7F 7F 00 80 80 0F 20 00 (byte 7, bit 0x20)
-    if (report[7] & 0x20) {
-        decoded_report |= MASK_KEY_USER2; // Start (mapped to USER2)
+        decoded_report |= MASK_KEY_USER3;  // Y button maps to A
     }
     
     // Select: 00 7F 7F 00 80 80 0F 10 00 (byte 7, bit 0x10)
     if (report[7] & 0x10) {
-        decoded_report |= MASK_KEY_USER1; // Select (mapped to USER1)
+        decoded_report |= MASK_KEY_USER1;  // Select button
     }
     
-    // R: 00 7F 7F 00 80 80 0F 02 00 (byte 7, bit 0x02)
+    // Start: 00 7F 7F 00 80 80 0F 20 00 (byte 7, bit 0x20)
+    if (report[7] & 0x20) {
+        decoded_report |= MASK_KEY_USER2;  // Start button
+    }
+    
+    // R: 00 7F 7F 00 80 80 0F 02 00 (byte 7, bit 0x02) - Map to B as an alternative
     if (report[7] & 0x02) {
-        decoded_report |= MASK_KEY_USER4; // R button
+        decoded_report |= MASK_JOY2_BTN;   // R button maps to B
     }
     
-    // L: 00 7F 7F 00 80 80 0F 01 00 (byte 7, bit 0x01)
+    // L: 00 7F 7F 00 80 80 0F 01 00 (byte 7, bit 0x01) - Map to A as an alternative
     if (report[7] & 0x01) {
-        decoded_report |= MASK_JOY1_BTN; // L button
+        decoded_report |= MASK_KEY_USER3;  // L button maps to A
     }
     
     // Send the decoded gamepad state
@@ -502,10 +510,10 @@ int proto = tuh_hid_interface_protocol (dev_addr, instance);
       process_kbd_report ((hid_keyboard_report_t const*) report);
       break;
     case HID_ITF_PROTOCOL_NONE:
-        if (len == 8) {
-            process_gamepad_report (report);
-        }
-        break;
+		if (len >= 8 && len <= 9) {
+			process_gamepad_report(report);
+		}
+		break;
 #if 0 // you get to implement it, hoss!
     case HID_ITF_PROTOCOL_MOUSE:
         printf("MOUSE len=%d\n", len);
