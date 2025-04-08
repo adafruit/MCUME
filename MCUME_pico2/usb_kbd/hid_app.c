@@ -396,22 +396,22 @@ static void process_gamepad_report(const uint8_t *report) {
     }
 
     // A Button (check for 0x2F or 0x1F in byte 6)
-    if ((report[5] & 0x2F) || (report[5] & 0x1F)) { 
+    if ((report[5] & 0x20) || (report[5] & 0x10)) { 
         decoded_report |= MASK_KEY_USER3; 
     }
 
     // B Button (check for 0x4F or 0x8F in byte 6)
-    if ((report[5] & 0x4F) || (report[5] & 0x8F)) { 
+    if ((report[5] & 0x40) || (report[5] & 0x80)) { 
         decoded_report |= MASK_JOY2_BTN; 
     }
 
     // Select Button (byte 7, bit 0x10)
-    if (report[7] & 0x10) { 
+    if (report[6] & 0x10) { 
         decoded_report |= MASK_KEY_USER1; 
     }
 
     // Start Button (byte 7, bit 0x20)
-    if (report[7] & 0x20) { 
+    if (report[6] & 0x20) { 
         decoded_report |= MASK_KEY_USER2; 
     }
 
