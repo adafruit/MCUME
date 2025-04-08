@@ -1282,14 +1282,12 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
         gamepad_addr = dev_addr;
         gamepad_instance = instance;
         tuh_hid_receive_report(dev_addr, instance);
-        return true;
     }
     
     // Check for keyboard (existing code will handle this)
     uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
         printf("USB keyboard detected\r\n");
-        return true;
     }
     
     // Check for generic gamepad/joystick
@@ -1309,11 +1307,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_re
         gamepad_addr = dev_addr;
         gamepad_instance = instance;
         tuh_hid_receive_report(dev_addr, instance);
-        return true;
     }
     
     // Not a supported device
-    return false;
 }
 
 // Invoked when device with hid interface is unmounted
