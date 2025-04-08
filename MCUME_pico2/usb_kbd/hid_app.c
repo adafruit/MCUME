@@ -375,54 +375,69 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
 }
  
 // this mapping is hard coded for a certain snes-style gamepad and picogb!
-static void process_gamepad_report (const uint8_t *report) {
-  uint16_t decoded_report = 0;
-
-  // X coordinate
-  if (report[0] == 0) {
-      decoded_report |= MASK_JOY2_RIGHT;
-  } else if(report[0] == 0xff) {
-      decoded_report |= MASK_JOY2_LEFT;
-  }
-
-  // Y coordinate
-  if (report[1] == 0) {
-      decoded_report |= MASK_JOY2_UP;
-  } else if(report[1] == 0xff) {
-      decoded_report |= MASK_JOY2_DOWN;
-  }
-
-  // X A B Y = top bits of byte 5 . Let's just have X/Y double A/B
-  if (report[5] & 0x10) {
-      decoded_report |= MASK_JOY2_BTN; // X
-  }
-  if (report[5] & 0x20) {
-      decoded_report |= MASK_KEY_USER3; // A -- this is picogb numbering
-  }
-  if (report[5] & 0x40) {
-      decoded_report |= MASK_JOY2_BTN; // B
-  }
-  if (report[5] & 0x80) {
-      decoded_report |= MASK_KEY_USER3; // Y
-  }
-
-  // SELECT START = top bits of byte 6
-  if (report[6] & 0x10) {
-      decoded_report |= MASK_KEY_USER1; // SELECT
-  }
-  if (report[6] & 0x20) {
-      decoded_report |= MASK_KEY_USER2; // START
-  }
-
-  // Decode shoulder buttons into B/A too
-  if (report[6] & 0x1) {
-      decoded_report |= MASK_JOY2_BTN; // B
-  }
-  if (report[6] & 0x2) {
-      decoded_report |= MASK_KEY_USER3; // Y
-  }
-  
-  kbd_signal_raw_gamepad(decoded_report);
+static void process_gamepad_report(const uint8_t *report) {
+    uint16_t decoded_report = 0;
+    
+    // Default input format from your HID explorer output:
+    // default input (no buttons pressed): 00 7F 7F 00 80 80 0F 00 00
+    
+    // X-axis (byte 1): 0x00=left, 0x7F=center, 0xFF=right
+    if (report[1] < 0x40) {
+        decoded_report |= MASK_JOY2_LEFT;
+    } else if (report[1] > 0xB0) {
+        decoded_report |= MASK_JOY2_RIGHT;
+    }
+    
+    // Y-axis (byte 2): 0x00=up, 0x7F=center, 0xFF=down
+    if (report[2] < 0x40) {
+        decoded_report |= MASK_JOY2_UP;
+    } else if (report[2] > 0xB0) {
+        decoded_report |= MASK_JOY2_DOWN;
+    }
+    
+    // Face buttons (byte 6)
+    // A: 00 7F 7F 00 80 80 2F 00 00 (bit 0x20)
+    if (report[6] & 0x20) {
+        decoded_report |= MASK_JOY2_BTN;  // A button
+    }
+    
+    // B: 00 7F 7F 00 80 80 4F 00 00 (bit 0x40)
+    if (report[6] & 0x40) {
+        decoded_report |= MASK_KEY_USER1; // B button
+    }
+    
+    // X: 00 7F 7F 00 80 80 1F 00 00 (bit 0x10)
+    if (report[6] & 0x10) {
+        decoded_report |= MASK_KEY_USER2; // X button
+    }
+    
+    // Y: 00 7F 7F 00 80 80 8F 00 00 (bit 0x80)
+    if (report[6] & 0x80) {
+        decoded_report |= MASK_KEY_USER3; // Y button
+    }
+    
+    // Start: 00 7F 7F 00 80 80 0F 20 00 (byte 7, bit 0x20)
+    if (report[7] & 0x20) {
+        decoded_report |= MASK_KEY_USER2; // Start (mapped to USER2)
+    }
+    
+    // Select: 00 7F 7F 00 80 80 0F 10 00 (byte 7, bit 0x10)
+    if (report[7] & 0x10) {
+        decoded_report |= MASK_KEY_USER1; // Select (mapped to USER1)
+    }
+    
+    // R: 00 7F 7F 00 80 80 0F 02 00 (byte 7, bit 0x02)
+    if (report[7] & 0x02) {
+        decoded_report |= MASK_KEY_USER4; // R button
+    }
+    
+    // L: 00 7F 7F 00 80 80 0F 01 00 (byte 7, bit 0x01)
+    if (report[7] & 0x01) {
+        decoded_report |= MASK_JOY1_BTN; // L button
+    }
+    
+    // Send the decoded gamepad state
+    kbd_signal_raw_gamepad(decoded_report);
 }
 
 //--------------------------------------------------------------------+
