@@ -1269,7 +1269,7 @@ static void process_gamepad_report(uint8_t const* report, uint16_t len) {
 // TinyUSB callbacks for HID devices
 
 // Invoked when device with hid interface is mounted
-bool tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
+void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
     uint16_t vid, pid;
     tuh_vid_pid_get(dev_addr, &vid, &pid);
     
