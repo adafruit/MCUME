@@ -1223,6 +1223,9 @@ static void signal_joy (int code, int pressed, int flags) {
   if ( (code == ' ') && (!pressed) ) usbnavpad &= ~MASK_KEY_USER4;
 }
 
+void kbd_signal_raw_key (int keycode, int code, int codeshifted, int flags, int pressed) {
+  //printf("k %d\r\n", keycode); 
+
 static void process_gamepad_report(uint8_t const* report, uint16_t len) {
     // Check if we have enough data
     if (len < 9) return;
@@ -1339,9 +1342,8 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     // Request to receive report again
     tuh_hid_receive_report(dev_addr, instance);
 }
+#endif
 
-void kbd_signal_raw_key (int keycode, int code, int codeshifted, int flags, int pressed) {
-  //printf("k %d\r\n", keycode); 
 #ifdef FILEBROWSER
   if (menuActive())
   {
