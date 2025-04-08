@@ -375,64 +375,45 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
 }
 
 static void process_gamepad_report(const uint8_t *report) {
-    // Print the first few bytes of the report for debugging
-    printf("GP: %02x %02x %02x %02x %02x %02x %02x %02x\n", 
-           report[0], report[1], report[2], report[3], 
-           report[4], report[5], report[6], report[7]);
-
     uint16_t decoded_report = 0;
 
     // Directional Controls
-    // Check both bytes 1 and 2 for each direction
-    // LEFT: byte 2 is 0x00 and byte 1 is 0x7F
-    if (report[2] == 0x00 && report[1] == 0x7F) { 
-        decoded_report |= MASK_JOY2_LEFT; 
+    // Left is when byte 2 is close to 0x00
+    if (report[2] < 0x40) { 
+        decoded_report |= MASK_JOY2_RIGHT;  // Note: swapped due to gameboy mapping
     }
-    // RIGHT: byte 2 is 0xFF and byte 1 is 0x7F
-    if (report[2] == 0xFF && report[1] == 0x7F) { 
-        decoded_report |= MASK_JOY2_RIGHT; 
+    // Right is when byte 2 is close to 0xFF
+    if (report[2] > 0xB0) { 
+        decoded_report |= MASK_JOY2_LEFT;   // Note: swapped due to gameboy mapping
     }
-    // UP: byte 1 is 0x00 and byte 2 is 0x7F
-    if (report[1] == 0x00 && report[2] == 0x7F) { 
+    // Up is when byte 1 is close to 0x00
+    if (report[1] < 0x40) { 
         decoded_report |= MASK_JOY2_UP; 
     }
-    // DOWN: byte 1 is 0xFF and byte 2 is 0x7F
-    if (report[1] == 0xFF && report[2] == 0x7F) { 
+    // Down is when byte 1 is close to 0xFF
+    if (report[1] > 0xB0) { 
         decoded_report |= MASK_JOY2_DOWN; 
     }
 
-    // A button -> maps to MASK_KEY_USER3 (byte 6 is 0x2F)
-    if (report[6] == 0x2F) { 
+    // A Button (check for 0x2F or 0x1F in byte 6)
+    if ((report[6] & 0x20) || (report[6] & 0x10)) { 
         decoded_report |= MASK_KEY_USER3; 
     }
 
-    // B button -> maps to MASK_JOY2_BTN (byte 6 is 0x4F or 0x8F)
-    if ((report[6] == 0x4F) || (report[6] == 0x8F)) { 
+    // B Button (check for 0x4F or 0x8F in byte 6)
+    if ((report[6] & 0x40) || (report[6] & 0x80)) { 
         decoded_report |= MASK_JOY2_BTN; 
     }
 
-    // X button (debugging) (byte 6 is 0x1F)
-    if (report[6] == 0x1F) {
-        printf("X button pressed\n");
-    }
-
-    // Y button (debugging) (byte 6 is 0x8F)
-    if (report[6] == 0x8F) {
-        printf("Y button pressed\n");
-    }
-
-    // Start button -> maps to MASK_KEY_USER2 (byte 7 is 0x20)
-    if (report[7] == 0x20) { 
-        decoded_report |= MASK_KEY_USER2; 
-    }
-
-    // Select button -> maps to MASK_KEY_USER1 (byte 7 is 0x10)
-    if (report[7] == 0x10) { 
+    // Select Button (byte 7, bit 0x10)
+    if (report[7] & 0x10) { 
         decoded_report |= MASK_KEY_USER1; 
     }
 
-    // Additional debug for button mappings
-    printf("Decoded report: %04x\n", decoded_report);
+    // Start Button (byte 7, bit 0x20)
+    if (report[7] & 0x20) { 
+        decoded_report |= MASK_KEY_USER2; 
+    }
 
     // Send the decoded gamepad state
     kbd_signal_raw_gamepad(decoded_report);
