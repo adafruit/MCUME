@@ -373,60 +373,48 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
   } 
   prev_report = *report;
 }
- 
+
 static void process_gamepad_report(const uint8_t *report) {
     uint16_t decoded_report = 0;
-    
-    // Fix the directional controls with proper mapping
-    // LEFT on controller maps to RIGHT on GB
-    if (report[2] < 0x40) {
-        decoded_report |= MASK_JOY2_RIGHT;  // Changed from LEFT to RIGHT
+
+    // Directional Controls
+    // Left is when byte 2 is close to 0x00
+    if (report[2] < 0x40) { 
+        decoded_report |= MASK_JOY2_RIGHT;  // Note: swapped due to gameboy mapping
     }
-    
-    // RIGHT on controller maps to LEFT on GB
-    if (report[2] > 0xB0) {
-        decoded_report |= MASK_JOY2_LEFT;  // Changed from RIGHT to LEFT
+    // Right is when byte 2 is close to 0xFF
+    if (report[2] > 0xB0) { 
+        decoded_report |= MASK_JOY2_LEFT;   // Note: swapped due to gameboy mapping
     }
-    
-    // UP and DOWN seem correctly mapped
-    if (report[1] < 0x40) {
-        decoded_report |= MASK_JOY2_UP;
+    // Up is when byte 1 is close to 0x00
+    if (report[1] < 0x40) { 
+        decoded_report |= MASK_JOY2_UP; 
     }
-    
-    if (report[1] > 0xB0) {
-        decoded_report |= MASK_JOY2_DOWN;
+    // Down is when byte 1 is close to 0xFF
+    if (report[1] > 0xB0) { 
+        decoded_report |= MASK_JOY2_DOWN; 
     }
-    
-    // SNES A button (report[6] & 0x20) maps to GB A 
-    if (report[6] & 0x20) {
-        decoded_report |= MASK_KEY_USER3;  // GB A button
+
+    // A Button (check for 0x2F or 0x1F in byte 6)
+    if ((report[6] & 0x20) || (report[6] & 0x10)) { 
+        decoded_report |= MASK_KEY_USER3; 
     }
-    
-    // SNES B button (report[6] & 0x40) maps to GB B
-    if (report[6] & 0x40) {
-        decoded_report |= MASK_JOY2_BTN;  // GB B button
+
+    // B Button (check for 0x4F or 0x8F in byte 6)
+    if ((report[6] & 0x40) || (report[6] & 0x80)) { 
+        decoded_report |= MASK_JOY2_BTN; 
     }
-    
-    // SNES X button could map to another function if needed
-    // if (report[6] & 0x10) {
-    //     decoded_report |= ...;
-    // }
-    
-    // SNES Y button could map to another function if needed
-    // if (report[6] & 0x80) {
-    //     decoded_report |= ...;
-    // }
-    
-    // Select button
-    if (report[7] & 0x10) {
-        decoded_report |= MASK_KEY_USER1;  // GB SELECT
+
+    // Select Button (byte 7, bit 0x10)
+    if (report[7] & 0x10) { 
+        decoded_report |= MASK_KEY_USER1; 
     }
-    
-    // Start button
-    if (report[7] & 0x20) {
-        decoded_report |= MASK_KEY_USER2;  // GB START
+
+    // Start Button (byte 7, bit 0x20)
+    if (report[7] & 0x20) { 
+        decoded_report |= MASK_KEY_USER2; 
     }
-    
+
     // Send the decoded gamepad state
     kbd_signal_raw_gamepad(decoded_report);
 }
