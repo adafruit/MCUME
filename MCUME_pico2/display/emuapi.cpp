@@ -1183,10 +1183,6 @@ char * menuSelection(void)
 ********************************/ 
 #ifdef HAS_USBHOST
 
-static bool gamepad_connected = false;
-static uint8_t gamepad_addr = 0;
-static uint8_t gamepad_instance = 0;
-
 #ifdef KEYBOARD_ACTIVATED
 static bool kbdasjoy = false;
 #else
@@ -1225,125 +1221,6 @@ static void signal_joy (int code, int pressed, int flags) {
 
 void kbd_signal_raw_key (int keycode, int code, int codeshifted, int flags, int pressed) {
   //printf("k %d\r\n", keycode); 
-
-static void process_gamepad_report(uint8_t const* report, uint16_t len) {
-    // Check if we have enough data
-    if (len < 9) return;
-    
-    // Clear previous gamepad state while preserving keyboard input
-    uint16_t kbd_state = usbnavpad & (MASK_OSKB);
-    usbnavpad = kbd_state;
-    
-    // D-pad emulation from left analog stick (bytes 1 & 2)
-    // X-axis: 0x00=left, 0x7F=center, 0xFF=right
-    // Y-axis: 0x00=up, 0x7F=center, 0xFF=down
-    uint8_t x_axis = report[1];
-    uint8_t y_axis = report[2];
-    
-    // Apply some deadzone (values near center should be ignored)
-    // Horizontal movement
-    if (x_axis < 0x40) {
-        usbnavpad |= MASK_JOY2_LEFT;
-    } else if (x_axis > 0xB0) {
-        usbnavpad |= MASK_JOY2_RIGHT;
-    }
-    
-    // Vertical movement
-    if (y_axis < 0x40) {
-        usbnavpad |= MASK_JOY2_UP;
-    } else if (y_axis > 0xB0) {
-        usbnavpad |= MASK_JOY2_DOWN;
-    }
-    
-    // Face buttons (byte 6)
-    uint8_t face_buttons = report[6] & 0xF0; // Mask out the base value (0x0F)
-    if (face_buttons & 0x20) usbnavpad |= MASK_JOY2_BTN;  // A button
-    if (face_buttons & 0x40) usbnavpad |= MASK_KEY_USER1; // B button
-    if (face_buttons & 0x10) usbnavpad |= MASK_KEY_USER2; // X button
-    if (face_buttons & 0x80) usbnavpad |= MASK_KEY_USER3; // Y button
-    
-    // Shoulder and menu buttons (byte 7)
-    if (report[7] & 0x01) usbnavpad |= MASK_JOY1_BTN;    // L button
-    if (report[7] & 0x02) usbnavpad |= MASK_KEY_USER4;   // R button
-    if (report[7] & 0x10) usbnavpad |= MASK_KEY_USER2;   // Select (alt mapping)
-    if (report[7] & 0x20) usbnavpad |= MASK_KEY_USER1;   // Start (alt mapping)
-}
-
-// TinyUSB callbacks for HID devices
-
-// Invoked when device with hid interface is mounted
-bool tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
-    uint16_t vid, pid;
-    tuh_vid_pid_get(dev_addr, &vid, &pid);
-    
-    printf("HID device: VID = 0x%04x, PID = 0x%04x\r\n", vid, pid);
-    
-    // Check if this is our known gamepad (Totsu Engineering, 0x081F/0xE401)
-    if (vid == 0x081F && pid == 0xE401) {
-        printf("USB gamepad detected\r\n");
-        gamepad_connected = true;
-        gamepad_addr = dev_addr;
-        gamepad_instance = instance;
-        tuh_hid_receive_report(dev_addr, instance);
-        return true;
-    }
-    
-    // Check for keyboard (existing code will handle this)
-    uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
-    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-        printf("USB keyboard detected\r\n");
-        return true;
-    }
-    
-    // Check for generic gamepad/joystick
-    bool is_joystick = false;
-    for (uint16_t i = 0; i < desc_len - 2; i++) {
-        // Look for Generic Desktop usage page (0x01) followed by Joystick usage (0x04)
-        if (desc_report[i] == 0x05 && desc_report[i+1] == 0x01 && 
-            i+3 < desc_len && desc_report[i+2] == 0x09 && desc_report[i+3] == 0x04) {
-            is_joystick = true;
-            break;
-        }
-    }
-    
-    if (is_joystick) {
-        printf("Generic USB joystick/gamepad detected\r\n");
-        gamepad_connected = true;
-        gamepad_addr = dev_addr;
-        gamepad_instance = instance;
-        tuh_hid_receive_report(dev_addr, instance);
-        return true;
-    }
-    
-    // Not a supported device
-    return false;
-}
-
-// Invoked when device with hid interface is unmounted
-void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
-    if (dev_addr == gamepad_addr && instance == gamepad_instance) {
-        printf("Gamepad disconnected\r\n");
-        gamepad_connected = false;
-        gamepad_addr = 0;
-        gamepad_instance = 0;
-        
-        // Clear gamepad input flags
-        usbnavpad &= MASK_OSKB;  // Keep only the on-screen keyboard state
-    }
-}
-
-// Invoked when received report from device
-void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* report, uint16_t len) {
-    if (dev_addr == gamepad_addr && instance == gamepad_instance) {
-        // Process gamepad report
-        process_gamepad_report(report, len);
-    }
-    
-    // Request to receive report again
-    tuh_hid_receive_report(dev_addr, instance);
-}
-#endif
-
 #ifdef FILEBROWSER
   if (menuActive())
   {
