@@ -376,65 +376,61 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
  
 // this mapping is hard coded for a certain snes-style gamepad and picogb!
 static void process_gamepad_report(const uint8_t *report) {
+    // Create a fresh report state
     uint16_t decoded_report = 0;
     
-    // Directional controls - X and Y axes
-    // Note: No need to swap or invert - the Game Boy code handles that
+    // Print the first few bytes of the report for debugging
+    // printf("GP: %02x %02x %02x %02x %02x %02x %02x %02x\n", 
+    //      report[0], report[1], report[2], report[3], report[4], report[5], report[6], report[7]);
     
-    // X-axis (byte 1): 0x00=left, 0x7F=center, 0xFF=right
-    if (report[1] < 0x40) {  // Left
+    // Try a completely different approach to mapping the directional controls
+    
+    // LEFT button -> maps to MASK_JOY2_LEFT
+    if (report[2] < 0x40) {
         decoded_report |= MASK_JOY2_LEFT;
-    } else if (report[1] > 0xB0) {  // Right
+    }
+    
+    // RIGHT button -> maps to MASK_JOY2_RIGHT
+    if (report[2] > 0xB0) {
         decoded_report |= MASK_JOY2_RIGHT;
     }
     
-    // Y-axis (byte 2): 0x00=up, 0x7F=center, 0xFF=down
-    if (report[2] < 0x40) {  // Up
+    // UP button -> maps to MASK_JOY2_UP
+    if (report[1] < 0x40) {
         decoded_report |= MASK_JOY2_UP;
-    } else if (report[2] > 0xB0) {  // Down
+    }
+    
+    // DOWN button -> maps to MASK_JOY2_DOWN
+    if (report[1] > 0xB0) {
         decoded_report |= MASK_JOY2_DOWN;
     }
     
-    // Face buttons (byte 6)
-    // A button (maps to Game Boy A)
-    if (report[6] & 0x20) {
+    // A button -> maps to MASK_KEY_USER3 (byte 6, bit 0x20)
+    if ((report[6] & 0x20) || (report[6] & 0x10) || (report[7] & 0x01)) {
         decoded_report |= MASK_KEY_USER3;
     }
     
-    // B button (maps to Game Boy B)
-    if (report[6] & 0x40) {
+    // B button -> maps to MASK_JOY2_BTN (byte 6, bit 0x40)
+    if ((report[6] & 0x40) || (report[6] & 0x80) || (report[7] & 0x02)) {
         decoded_report |= MASK_JOY2_BTN;
     }
     
-    // X button (alternate A button)
-    if (report[6] & 0x10) {
-        decoded_report |= MASK_KEY_USER3;
-    }
-    
-    // Y button (alternate B button)
-    if (report[6] & 0x80) {
-        decoded_report |= MASK_JOY2_BTN;
-    }
-    
-    // Shoulder and menu buttons (byte 7)
-    // L button (alternate A button)
-    if (report[7] & 0x01) {
-        decoded_report |= MASK_KEY_USER3;
-    }
-    
-    // R button (alternate B button)
-    if (report[7] & 0x02) {
-        decoded_report |= MASK_JOY2_BTN;
-    }
-    
-    // Select button
+    // Select button -> maps to MASK_KEY_USER1 (byte 7, bit 0x10)
     if (report[7] & 0x10) {
         decoded_report |= MASK_KEY_USER1;
     }
     
-    // Start button
+    // Start button -> maps to MASK_KEY_USER2 (byte 7, bit 0x20)
     if (report[7] & 0x20) {
         decoded_report |= MASK_KEY_USER2;
+    }
+
+    if ((report[6] & 0x20) || (report[6] & 0x10)) {  // A or X button
+        decoded_report |= MASK_KEY_USER1;  // SELECT for boot screen
+    }
+    
+    if ((report[6] & 0x40) || (report[6] & 0x80)) {  // B or Y button
+        decoded_report |= MASK_KEY_USER2;  // START for boot screen
     }
     
     // Send the decoded gamepad state
