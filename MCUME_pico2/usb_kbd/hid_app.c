@@ -379,29 +379,29 @@ static void process_gamepad_report(const uint8_t *report) {
 
     // Directional Controls
     // Left is when byte 2 is close to 0x00
-    if (report[1] < 0x40) { 
+    if (report[0] < 0x40) { 
         decoded_report |= MASK_JOY2_RIGHT;  // Note: swapped due to gameboy mapping
     }
     // Right is when byte 2 is close to 0xFF
-    if (report[1] > 0xB0) { 
+    if (report[0] > 0xB0) { 
         decoded_report |= MASK_JOY2_LEFT;   // Note: swapped due to gameboy mapping
     }
     // Up is when byte 1 is close to 0x00
-    if (report[2] < 0x40) { 
+    if (report[1] < 0x40) { 
         decoded_report |= MASK_JOY2_UP; 
     }
     // Down is when byte 1 is close to 0xFF
-    if (report[2] > 0xB0) { 
+    if (report[1] > 0xB0) { 
         decoded_report |= MASK_JOY2_DOWN; 
     }
 
     // A Button (check for 0x2F or 0x1F in byte 6)
-    if ((report[6] & 0x2F) || (report[6] & 0x1F)) { 
+    if ((report[5] & 0x2F) || (report[5] & 0x1F)) { 
         decoded_report |= MASK_KEY_USER3; 
     }
 
     // B Button (check for 0x4F or 0x8F in byte 6)
-    if ((report[6] & 0x4F) || (report[6] & 0x8F)) { 
+    if ((report[5] & 0x4F) || (report[5] & 0x8F)) { 
         decoded_report |= MASK_JOY2_BTN; 
     }
 
