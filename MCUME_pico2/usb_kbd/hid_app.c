@@ -373,56 +373,50 @@ static void process_kbd_report (hid_keyboard_report_t const *report)
   } 
   prev_report = *report;
 }
- 
-// this mapping is hard coded for a certain snes-style gamepad and picogb!
-static void process_gamepad_report (const uint8_t *report) {
-  uint16_t decoded_report = 0;
 
-  // X coordinate
-  if (report[0] == 0) {
-      decoded_report |= MASK_JOY2_RIGHT;
-  } else if(report[0] == 0xff) {
-      decoded_report |= MASK_JOY2_LEFT;
-  }
+static void process_gamepad_report(const uint8_t *report) {
+    uint16_t decoded_report = 0;
 
-  // Y coordinate
-  if (report[1] == 0) {
-      decoded_report |= MASK_JOY2_UP;
-  } else if(report[1] == 0xff) {
-      decoded_report |= MASK_JOY2_DOWN;
-  }
+    // Directional Controls
+    // Left is when byte 2 is close to 0x00
+    if (report[0] < 0x40) { 
+        decoded_report |= MASK_JOY2_RIGHT;  // Note: swapped due to gameboy mapping
+    }
+    // Right is when byte 2 is close to 0xFF
+    if (report[0] > 0xB0) { 
+        decoded_report |= MASK_JOY2_LEFT;   // Note: swapped due to gameboy mapping
+    }
+    // Up is when byte 1 is close to 0x00
+    if (report[1] < 0x40) { 
+        decoded_report |= MASK_JOY2_UP; 
+    }
+    // Down is when byte 1 is close to 0xFF
+    if (report[1] > 0xB0) { 
+        decoded_report |= MASK_JOY2_DOWN; 
+    }
 
-  // X A B Y = top bits of byte 5 . Let's just have X/Y double A/B
-  if (report[5] & 0x10) {
-      decoded_report |= MASK_JOY2_BTN; // X
-  }
-  if (report[5] & 0x20) {
-      decoded_report |= MASK_KEY_USER3; // A -- this is picogb numbering
-  }
-  if (report[5] & 0x40) {
-      decoded_report |= MASK_JOY2_BTN; // B
-  }
-  if (report[5] & 0x80) {
-      decoded_report |= MASK_KEY_USER3; // Y
-  }
+    // A Button (check for 0x2F or 0x1F in byte 6)
+    if ((report[5] & 0x20) || (report[5] & 0x10)) { 
+        decoded_report |= MASK_KEY_USER3; 
+    }
 
-  // SELECT START = top bits of byte 6
-  if (report[6] & 0x10) {
-      decoded_report |= MASK_KEY_USER1; // SELECT
-  }
-  if (report[6] & 0x20) {
-      decoded_report |= MASK_KEY_USER2; // START
-  }
+    // B Button (check for 0x4F or 0x8F in byte 6)
+    if ((report[5] & 0x40) || (report[5] & 0x80)) { 
+        decoded_report |= MASK_JOY2_BTN; 
+    }
 
-  // Decode shoulder buttons into B/A too
-  if (report[6] & 0x1) {
-      decoded_report |= MASK_JOY2_BTN; // B
-  }
-  if (report[6] & 0x2) {
-      decoded_report |= MASK_KEY_USER3; // Y
-  }
-  
-  kbd_signal_raw_gamepad(decoded_report);
+    // Select Button (byte 7, bit 0x10)
+    if (report[6] & 0x10) { 
+        decoded_report |= MASK_KEY_USER1; 
+    }
+
+    // Start Button (byte 7, bit 0x20)
+    if (report[6] & 0x20) { 
+        decoded_report |= MASK_KEY_USER2; 
+    }
+
+    // Send the decoded gamepad state
+    kbd_signal_raw_gamepad(decoded_report);
 }
 
 //--------------------------------------------------------------------+
@@ -487,10 +481,10 @@ int proto = tuh_hid_interface_protocol (dev_addr, instance);
       process_kbd_report ((hid_keyboard_report_t const*) report);
       break;
     case HID_ITF_PROTOCOL_NONE:
-        if (len == 8) {
-            process_gamepad_report (report);
-        }
-        break;
+		if (len >= 8) {
+			process_gamepad_report(report);
+		}
+		break;
 #if 0 // you get to implement it, hoss!
     case HID_ITF_PROTOCOL_MOUSE:
         printf("MOUSE len=%d\n", len);
