@@ -1305,7 +1305,6 @@ const struct audio_i2s_config config =
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,
             .dma_channel = AUD_DMA_CHANNEL,
             .pio_sm = 0,
-            .clock_pins_swapped = true,
         };
 
 static struct audio_buffer_format producer_format = {
